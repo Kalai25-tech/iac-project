@@ -1,4 +1,4 @@
-name: "Vprofile IAC"
+name: "vision IAC"
 on:
   push:
     branches:
@@ -19,7 +19,7 @@ env:
  # S3 bucket for the Terraform state
  BUCKET_TF_STATE: ${{ secrets.BUCKET_TF_STATE}}
  AWS_REGION: us-east-2
- EKS_CLUSTER: vprofile-eks
+ EKS_CLUSTER: vision-eks
 
 jobs:
    terraform:
