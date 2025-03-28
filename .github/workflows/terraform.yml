@@ -1,4 +1,5 @@
 name: "Vprofile IAC"
+
 on:
   push:
     branches:
@@ -13,13 +14,11 @@ on:
       - terraform/**
 
 env:
- # AWS Credentials
- AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
- AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
- # Terraform State S3 Bucket
- BUCKET_TF_STATE: ${{ secrets.BUCKET_TF_STATE }}
- AWS_REGION: us-east-2
- EKS_CLUSTER: vprofile-eks
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  BUCKET_TF_STATE: ${{ secrets.BUCKET_TF_STATE }}
+  AWS_REGION: us-east-2
+  EKS_CLUSTER: vprofile-eks
 
 jobs:
    terraform:
@@ -31,7 +30,7 @@ jobs:
          working-directory: ./terraform
 
      steps:
-       - name: Checkout source code 
+       - name: Checkout Source Code 
          uses: actions/checkout@v4
 
        - name: Setup Terraform
@@ -51,30 +50,23 @@ jobs:
          id: validate
          run: terraform validate
 
+       - name: Check if Log Group Exists & Import if Needed
+         run: |
+           if aws logs describe-log-groups --log-group-name-prefix "/aws/eks/${{ env.EKS_CLUSTER }}/cluster" --region $AWS_REGION | grep logGroupName; then
+             echo "Log Group Exists, Importing..."
+             terraform import aws_cloudwatch_log_group.eks_log_group "/aws/eks/${{ env.EKS_CLUSTER }}/cluster" || echo "Already Managed"
+           else
+             echo "Log Group Does Not Exist, Creating..."
+           fi
+
        - name: Terraform Plan
          id: plan
          run: terraform plan -no-color -input=false -out planfile
          continue-on-error: true
 
-       - name: Terraform Plan Status Check
+       - name: Terraform Plan Status
          if: steps.plan.outcome == 'failure' 
          run: exit 1     
-
-       - name: Force Recreate Resources if Needed
-         run: |
-           echo "Checking for existing resources..."
-           
-           # Check if CloudWatch Log Group exists
-           if aws logs describe-log-groups --log-group-name-prefix "/aws/eks/${{ env.EKS_CLUSTER }}/cluster" --region ${{ env.AWS_REGION }} | grep -q logGroups; then
-             echo "CloudWatch Log Group exists, tainting resource..."
-             terraform taint module.eks.aws_cloudwatch_log_group.this[0]
-           fi
-           
-           # Check if KMS alias exists
-           if aws kms list-aliases --region ${{ env.AWS_REGION }} | grep -q "alias/eks/${{ env.EKS_CLUSTER }}"; then
-             echo "KMS Alias exists, tainting resource..."
-             terraform taint module.eks.module.kms.aws_kms_alias.this["cluster"]
-           fi
 
        - name: Terraform Apply
          id: apply
